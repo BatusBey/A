@@ -1,0 +1,108 @@
+-- Servisleri tanımlama
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- Oyuncu ve karakter bilgileri
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+
+-- Takım bilgisi
+local team = player.Team and player.Team.Name
+
+-- Hedef noktalar
+local goals = workspace:FindFirstChild("Goals")
+local awayGoal = goals and goals:FindFirstChild("Away")
+local homeGoal = goals and goals:FindFirstChild("Home")
+
+if not awayGoal or not homeGoal then
+    warn("Goal nesneleri bulunamadı!")
+    return
+end
+
+-- BallService kontrolü
+local ballService = ReplicatedStorage:FindFirstChild("Packages")
+    and ReplicatedStorage.Packages:FindFirstChild("Knit")
+    and ReplicatedStorage.Packages.Knit.Services:FindFirstChild("BallService")
+
+if not ballService or not ballService.RE or not ballService.RE.Shoot then
+    warn("BallService veya Shoot methodu bulunamadı!")
+end
+
+-- Tween fonksiyonu
+local function tweenToPosition(targetCFrame, duration)
+    local tweenInfo = TweenInfo.new(
+        duration, -- Süre (saniye)
+        Enum.EasingStyle.Quad,
+        Enum.EasingDirection.Out
+    )
+    local tween = TweenService:Create(
+        humanoidRootPart,
+        tweenInfo,
+        { CFrame = targetCFrame }
+    )
+    tween:Play()
+    tween.Completed:Wait()
+end
+
+-- Şut atma fonksiyonu
+local function shootBall()
+    if ballService and ballService.RE and ballService.RE.Shoot then
+        local args = {
+            [1] = 30, -- Şut gücü
+            [4] = Vector3.new(0, 0, 0) -- Hedef pozisyon
+        }
+        ballService.RE.Shoot:FireServer(unpack(args))
+    else
+        warn("Shoot servisi mevcut değil!")
+    end
+end
+
+-- Topa tween atan ve durumu kontrol eden script
+local function AutoGoal()
+    while true do
+        -- Eğer oyuncunun karakterinde top varsa
+        if character:FindFirstChild("Football") then
+            print("Top sizde!")
+
+            if team == "Away" then
+                print("Away takımındasınız, Home Goal'e gidiliyor...")
+                tweenToPosition(homeGoal.CFrame, 2) -- HomeGoal'e doğru tweenle
+            elseif team == "Home" then
+                print("Home takımındasınız, Away Goal'e gidiliyor...")
+                tweenToPosition(awayGoal.CFrame, 2) -- AwayGoal'e doğru tweenle
+            else
+                warn("Takım bilgisi bulunamadı!")
+                return
+            end
+
+            -- Şut at
+            shootBall()
+            break -- Tween ve şut işlemi tamamlandığı için döngüyü sonlandır
+        else
+            -- Eğer top başkasındaysa
+            print("Top sizde değil, bekleniyor...")
+            local football = workspace:FindFirstChild("Football")
+
+            if football then
+                local ballHolder = football.Parent
+                if ballHolder and ballHolder:IsA("Model") and ballHolder ~= character then
+                    print("Top başka bir oyuncuda. Topun çıkması bekleniyor...")
+                    repeat
+                        wait(0.1) -- Topun başka bir oyuncudan çıkmasını bekler
+                    until football.Parent == workspace
+                end
+
+                -- Top boşta olduğunda oyuncuya tweenle
+                tweenToPosition(football.CFrame, 1)
+            else
+                warn("Football nesnesi bulunamadı!")
+                return
+            end
+        end
+    end
+end
+
+-- Çalıştır
+AutoGoal()
